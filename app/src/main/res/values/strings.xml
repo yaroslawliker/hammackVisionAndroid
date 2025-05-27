@@ -43,4 +43,10 @@
         libero vel nunc consequat, quis tincidunt nisl eleifend. Cras bibendum enim a justo luctus
         vestibulum. Fusce dictum libero quis erat maximus, vitae volutpat diam dignissim.
     </string>
+
+    <string name="run_button">Run camera</string>
+    <string name="calibrate_button">Calibrate camera</string>
+    <string name="config_camera">Configure camera</string>
+
+    <string name="camera_permission_denied">You can\'t use this feature without a camera</string>
 </resources>

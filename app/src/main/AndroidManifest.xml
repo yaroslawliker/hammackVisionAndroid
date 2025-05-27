@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.CAMERA" />
+
     <uses-feature android:name="android.hardware.camera.any" />
 
     <application
@@ -15,6 +16,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.HammockVision"
         tools:targetApi="31">
+        <activity
+            android:name=".RunCameraActivity"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="false"
