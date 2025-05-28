@@ -1,10 +1,7 @@
 package com.yarek.hammockvision;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Size;
-import android.widget.ImageView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -24,7 +21,6 @@ import androidx.lifecycle.LifecycleOwner;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -34,10 +30,12 @@ public class RunCameraActivity extends AppCompatActivity {
 
     PreviewView previewView;
 
-    Executor cameraExecutor;
     ProcessCameraProvider cameraProvider;
-    Preview preview;
     CameraSelector cameraSelector;
+    Camera camera;
+    Preview preview;
+    ImageAnalysis imageAnalysis;
+    Executor analisysExecutor;
 
 //    ObjectDetector objectDetector;
 
@@ -56,7 +54,7 @@ public class RunCameraActivity extends AppCompatActivity {
         cameraProviderFuture.addListener(() -> {
             try {
                 ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
-                bindPreview(cameraProvider);
+                bindUseCases(cameraProvider);
             } catch (ExecutionException | InterruptedException e) {
                 // No errors need to be handled for this Future.
                 // This should never be reached.
@@ -71,17 +69,35 @@ public class RunCameraActivity extends AppCompatActivity {
 
     }
 
-    void bindPreview(@NonNull ProcessCameraProvider cameraProvider) {
-        Preview preview = new Preview.Builder()
+    void bindUseCases(@NonNull ProcessCameraProvider cameraProvider) {
+        preview = new Preview.Builder()
                 .build();
 
-        CameraSelector cameraSelector = new CameraSelector.Builder()
+        imageAnalysis = new ImageAnalysis.Builder()
+                .setTargetResolution(new Size(1280, 960))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build();
+
+        analisysExecutor = Executors.newSingleThreadExecutor();
+
+        imageAnalysis.setAnalyzer(analisysExecutor, new ImageAnalysis.Analyzer() {
+            @Override
+            public void analyze(@NonNull ImageProxy imageProxy) {
+                int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
+
+
+
+                imageProxy.close();
+            }
+        });
+
+        cameraSelector = new CameraSelector.Builder()
                 .requireLensFacing(CameraSelector.LENS_FACING_BACK)
                 .build();
 
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
-        Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner)this, cameraSelector, preview);
+        camera = cameraProvider.bindToLifecycle((LifecycleOwner)this, cameraSelector, preview);
     }
 
 
