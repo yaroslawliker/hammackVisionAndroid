@@ -78,7 +78,7 @@ public class RunCameraActivity extends AppCompatActivity {
                 .setTargetResolution(new Size(1280, 960))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build();
-        
+
         analisysExecutor = Executors.newSingleThreadExecutor();
 
         imageAnalysis.setAnalyzer(analisysExecutor, new ImageAnalysis.Analyzer() {
@@ -98,7 +98,7 @@ public class RunCameraActivity extends AppCompatActivity {
 
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
-        camera = cameraProvider.bindToLifecycle((LifecycleOwner)this, cameraSelector, preview);
+        camera = cameraProvider.bindToLifecycle((LifecycleOwner)this, cameraSelector, preview, imageAnalysis);
     }
 
 
