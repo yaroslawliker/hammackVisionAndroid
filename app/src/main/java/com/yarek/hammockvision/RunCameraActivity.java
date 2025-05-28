@@ -74,10 +74,11 @@ public class RunCameraActivity extends AppCompatActivity {
                 .build();
 
         imageAnalysis = new ImageAnalysis.Builder()
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .setTargetResolution(new Size(1280, 960))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build();
-
+        
         analisysExecutor = Executors.newSingleThreadExecutor();
 
         imageAnalysis.setAnalyzer(analisysExecutor, new ImageAnalysis.Analyzer() {
