@@ -36,6 +36,9 @@ public class RunCameraActivity extends AppCompatActivity {
     Preview preview;
     CameraSelector cameraSelector;
 
+//    ObjectDetector objectDetector;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,6 +55,15 @@ public class RunCameraActivity extends AppCompatActivity {
 
         startCameraAnalysis();
     }
+
+//    void loadImageDetector() {
+//
+//        ObjectDetectorOptions options = ObjectDetectorOptions.builder()
+//                .setScoreThreshold(0.5f)
+//                .setMaxResults(5)
+//                .build();
+//    }
+
 
     void startCameraAnalysis() {
         cameraExecutor = Executors.newSingleThreadExecutor();
@@ -76,12 +88,15 @@ public class RunCameraActivity extends AppCompatActivity {
                                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                                 .build();
 
-                imageAnalysis.setAnalyzer(cameraExecutor, image -> {
-                    Bitmap bitmap = imageProxyToBitmapRGBA8888(image);
+                imageAnalysis.setAnalyzer(cameraExecutor, imageProxy -> {
 
-                    runOnUiThread(() -> imageView.setImageBitmap(bitmap));
 
-                    image.close();
+//                    Bitmap bitmap = imageProxyToBitmap(imageProxy); // твоя реалізація
+//                    Bitmap rotatedBitmap = rotateBitmap(bitmap, imageProxy.getImageInfo().getRotationDegrees());
+//
+//                    runObjectDetection(rotatedBitmap); // передай у TensorFlow Lite
+                    imageProxy.close();
+
                 });
 
                 cameraProvider.unbindAll();
@@ -98,22 +113,4 @@ public class RunCameraActivity extends AppCompatActivity {
 
         }, ContextCompat.getMainExecutor(this));
     }
-
-
-    public Bitmap imageProxyToBitmapRGBA8888(ImageProxy image) {
-        ImageProxy.PlaneProxy plane = image.getPlanes()[0];
-        ByteBuffer buffer = plane.getBuffer();
-        buffer.rewind();
-
-        int width = image.getWidth();
-        int height = image.getHeight();
-
-        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        bitmap.copyPixelsFromBuffer(buffer);
-
-        return bitmap;
-    }
-
-
-
 }
