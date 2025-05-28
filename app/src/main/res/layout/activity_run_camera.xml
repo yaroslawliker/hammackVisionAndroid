@@ -7,23 +7,18 @@
     android:layout_height="match_parent"
     tools:context=".RunCameraActivity">
 
-    <ImageView
-        android:id="@+id/runCameraView"
+    <androidx.camera.view.PreviewView
+        android:id="@+id/runCameraPreview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="1.0"
-        app:srcCompat="@android:drawable/ic_menu_camera" />
+        />
 
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Running camera"
-        app:layout_constraintBottom_toTopOf="@+id/runCameraView"
+        app:layout_constraintBottom_toTopOf="@+id/runCameraPreview"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
