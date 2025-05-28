@@ -1,5 +1,6 @@
 package com.yarek.hammockvision;
 
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.util.Size;
 
@@ -86,6 +87,8 @@ public class RunCameraActivity extends AppCompatActivity {
             public void analyze(@NonNull ImageProxy imageProxy) {
                 int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
 
+                Bitmap processedImage = resizeImageForTFLite(imageProxy);
+
 
 
                 imageProxy.close();
@@ -99,6 +102,17 @@ public class RunCameraActivity extends AppCompatActivity {
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
         camera = cameraProvider.bindToLifecycle((LifecycleOwner)this, cameraSelector, preview, imageAnalysis);
+    }
+
+    public Bitmap resizeImageForTFLite(ImageProxy imageProxy) {
+        Bitmap original = imageProxy.toBitmap();
+
+        int size = Math.min(original.getWidth(), original.getHeight());
+        int xOffset = (original.getWidth() - size) / 2;
+        int yOffset = (original.getHeight() - size) / 2;
+
+        Bitmap cropped = Bitmap.createBitmap(original, xOffset, yOffset, size, size);
+        return Bitmap.createScaledBitmap(cropped, 640, 640, true);
     }
 
 
