@@ -1,7 +1,5 @@
 package com.yarek.hammockvision;
 
-import android.graphics.Point;
-
 /**
  * Class describes camera matrix with fx, fy, skew, u, v
  */
@@ -40,7 +38,7 @@ public class CameraInternalParams {
     /**
      * Sets the new resolution, adoption other params
      */
-    void setResolution(int newWidth, int newHeight) {
+    void stretchResolution(int newWidth, int newHeight) {
 
         float scaleX = (float)newWidth / this.resolution[0];
         float scaleY = (float)newHeight / this.resolution[1];
