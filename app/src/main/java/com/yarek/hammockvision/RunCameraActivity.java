@@ -26,19 +26,21 @@ import androidx.lifecycle.LifecycleOwner;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import org.tensorflow.lite.DataType;
+import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.image.TensorImage;
-import org.tensorflow.lite.support.label.Category;
-import org.tensorflow.lite.task.vision.detector.Detection;
-import org.tensorflow.lite.task.vision.detector.ObjectDetector;
+import org.tensorflow.lite.support.common.FileUtil;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 public class RunCameraActivity extends AppCompatActivity {
-
 
     PreviewView previewView;
 
@@ -51,9 +53,13 @@ public class RunCameraActivity extends AppCompatActivity {
 
     int analyzeEveryFrames = 60;
     int framesPassed = 0;
-    ObjectDetector objectDetector;
+
+    Interpreter tfliteInterpreter;
 
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
+
+    static final int MODEL_INPUT_SIZE = 640;
+    static final int MODEL_INPUT_CHANNELS = 3;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,19 +76,25 @@ public class RunCameraActivity extends AppCompatActivity {
                 ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
                 bindUseCases(cameraProvider);
             } catch (ExecutionException | InterruptedException e) {
-                // No errors need to be handled for this Future.
-                // This should never be reached.
+                e.printStackTrace();
             }
         }, ContextCompat.getMainExecutor(this));
 
-        initObjectDetector();
+        initInterpreter();
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+    }
 
+    private void initInterpreter() {
+        try {
+            tfliteInterpreter = new Interpreter(FileUtil.loadMappedFile(this, "tiny_original.tflite"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     void bindUseCases(@NonNull ProcessCameraProvider cameraProvider) {
@@ -100,20 +112,16 @@ public class RunCameraActivity extends AppCompatActivity {
         imageAnalysis.setAnalyzer(analisysExecutor, new ImageAnalysis.Analyzer() {
             @Override
             public void analyze(@NonNull ImageProxy imageProxy) {
-                int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
 
                 if (framesPassed >= analyzeEveryFrames) {
 
                     Bitmap processedImage = resizeImageForTFLite(imageProxy);
 
-                    try {
-                        executeObjectDetection(processedImage);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
+                    runInference(processedImage);
+
                     framesPassed = 0;
                 }
-                framesPassed += 1;
+                framesPassed++;
 
                 imageProxy.close();
             }
@@ -125,7 +133,7 @@ public class RunCameraActivity extends AppCompatActivity {
 
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
-        camera = cameraProvider.bindToLifecycle((LifecycleOwner)this, cameraSelector, preview, imageAnalysis);
+        camera = cameraProvider.bindToLifecycle((LifecycleOwner) this, cameraSelector, preview, imageAnalysis);
     }
 
     public Bitmap resizeImageForTFLite(ImageProxy imageProxy) {
@@ -136,49 +144,115 @@ public class RunCameraActivity extends AppCompatActivity {
         int yOffset = (original.getHeight() - size) / 2;
 
         Bitmap cropped = Bitmap.createBitmap(original, xOffset, yOffset, size, size);
-        return Bitmap.createScaledBitmap(cropped, 640, 640, true);
+        return Bitmap.createScaledBitmap(cropped, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, true);
     }
 
-    private void initObjectDetector() {
-        ObjectDetector.ObjectDetectorOptions options = ObjectDetector.ObjectDetectorOptions.builder()
-                .setMaxResults(2)
-                .setScoreThreshold(0.3f)
-                .build();
-        try {
-            objectDetector = ObjectDetector.createFromFileAndOptions(
-                    this,
-                    "tiny_original.tflite",
-                    options
-            );
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+    private void runInference(Bitmap bitmap) {
+        ByteBuffer inputBuffer = convertBitmapToByteBuffer(bitmap);
+
+        // Відповідно до помилки модель дає вихід [100, 7]
+        float[][] output = new float[100][7];
+
+        tfliteInterpreter.run(inputBuffer, output);
+
+        List<DetectionResult> detections = parseOutputs(output);
+
+        debugPrint(detections);
+    }
+
+
+    // Перетворює Bitmap у ByteBuffer з float32 normalized в [0..1]
+    private ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
+        ByteBuffer buffer = ByteBuffer.allocateDirect(4 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * MODEL_INPUT_CHANNELS);
+        buffer.order(ByteOrder.nativeOrder());
+
+        int[] pixels = new int[MODEL_INPUT_SIZE * MODEL_INPUT_SIZE];
+        bitmap.getPixels(pixels, 0, MODEL_INPUT_SIZE, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
+
+        for (int i = 0; i < pixels.length; ++i) {
+            int pixel = pixels[i];
+
+            // ARGB -> RGB float normalized
+            float r = ((pixel >> 16) & 0xFF) / 255.f;
+            float g = ((pixel >> 8) & 0xFF) / 255.f;
+            float b = (pixel & 0xFF) / 255.f;
+
+            buffer.putFloat(r);
+            buffer.putFloat(g);
+            buffer.putFloat(b);
+        }
+
+        buffer.rewind();
+        return buffer;
+    }
+
+    private static class DetectionResult {
+        RectF bbox;
+        String label;
+        float confidence;
+
+        DetectionResult(RectF bbox, String label, float confidence) {
+            this.bbox = bbox;
+            this.label = label;
+            this.confidence = confidence;
         }
     }
 
+    // Приклад простої постобробки (потрібно підлаштувати під структуру твоєї моделі!)
+    private List<DetectionResult> parseOutputs(float[][] output) {
+        List<DetectionResult> results = new ArrayList<>();
 
-    private void executeObjectDetection(Bitmap bitmap) throws IOException {
-        TensorImage tensorImage = TensorImage.fromBitmap(bitmap);
-        List<Detection> results = objectDetector.detect(tensorImage);
+        float threshold = 0.3f;
 
-        debugPrint(results);
-    }
+        for (int i = 0; i < output.length; i++) {
+            float[] detection = output[i];
 
-    private void debugPrint(List<Detection> results) {
-        for (Detection result: results) {
-            RectF box = result.getBoundingBox();
+            float confidence = detection[4];
+            if (confidence < threshold) continue;
 
-            Log.d(TAG, "Detected object: ${i} ");
-            Log.d(TAG, "  boundingBox: (${box.left}, ${box.top}) - (${box.right},${box.bottom})");
+            float cx = detection[0];
+            float cy = detection[1];
+            float w = detection[2];
+            float h = detection[3];
 
-            for (int j = 0; j < result.getCategories().size(); j++) {
-                Category category = result.getCategories().get(j);
-                Log.d(TAG, "    Label " + j + ": " + category.getLabel());
-                int confidence = (int) (category.getScore() * 100);
-                Log.d(TAG, "    Confidence: " + confidence + "%");
+            int classId = 0;
+            float maxClassScore = detection[5];
+            for (int c = 6; c < detection.length; c++) {
+                if (detection[c] > maxClassScore) {
+                    maxClassScore = detection[c];
+                    classId = c - 5;
+                }
             }
+
+            float finalConfidence = confidence * maxClassScore;
+            if (finalConfidence < threshold) continue;
+
+            float left = cx - w / 2;
+            float top = cy - h / 2;
+            float right = cx + w / 2;
+            float bottom = cy + h / 2;
+
+            RectF bbox = new RectF(left, top, right, bottom);
+
+            String label = "class_" + classId;
+
+            results.add(new DetectionResult(bbox, label, finalConfidence));
         }
+
+        return results;
     }
 
 
+    private void debugPrint(List<DetectionResult> results) {
+        int i = 0;
+        for (DetectionResult result : results) {
+            RectF box = result.bbox;
 
+            Log.d(TAG, "Detected object: " + i);
+            Log.d(TAG, String.format("  boundingBox: (%.3f, %.3f) - (%.3f, %.3f)", box.left, box.top, box.right, box.bottom));
+            Log.d(TAG, "    Label: " + result.label);
+            Log.d(TAG, "    Confidence: " + (int) (result.confidence * 100) + "%");
+            i++;
+        }
+    }
 }
