@@ -1,7 +1,11 @@
 package com.yarek.hammockvision;
 
+import static android.content.ContentValues.TAG;
+
 import android.graphics.Bitmap;
+import android.graphics.RectF;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.Size;
 
 import androidx.activity.EdgeToEdge;
@@ -22,6 +26,13 @@ import androidx.lifecycle.LifecycleOwner;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import org.tensorflow.lite.support.image.TensorImage;
+import org.tensorflow.lite.support.label.Category;
+import org.tensorflow.lite.task.vision.detector.Detection;
+import org.tensorflow.lite.task.vision.detector.ObjectDetector;
+
+import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -38,7 +49,9 @@ public class RunCameraActivity extends AppCompatActivity {
     ImageAnalysis imageAnalysis;
     Executor analisysExecutor;
 
-//    ObjectDetector objectDetector;
+    int analyzeEveryFrames = 60;
+    int framesPassed = 0;
+    ObjectDetector objectDetector;
 
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
 
@@ -61,6 +74,8 @@ public class RunCameraActivity extends AppCompatActivity {
                 // This should never be reached.
             }
         }, ContextCompat.getMainExecutor(this));
+
+        initObjectDetector();
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -87,9 +102,18 @@ public class RunCameraActivity extends AppCompatActivity {
             public void analyze(@NonNull ImageProxy imageProxy) {
                 int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
 
-                Bitmap processedImage = resizeImageForTFLite(imageProxy);
+                if (framesPassed >= analyzeEveryFrames) {
 
+                    Bitmap processedImage = resizeImageForTFLite(imageProxy);
 
+                    try {
+                        executeObjectDetection(processedImage);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    framesPassed = 0;
+                }
+                framesPassed += 1;
 
                 imageProxy.close();
             }
@@ -113,6 +137,46 @@ public class RunCameraActivity extends AppCompatActivity {
 
         Bitmap cropped = Bitmap.createBitmap(original, xOffset, yOffset, size, size);
         return Bitmap.createScaledBitmap(cropped, 640, 640, true);
+    }
+
+    private void initObjectDetector() {
+        ObjectDetector.ObjectDetectorOptions options = ObjectDetector.ObjectDetectorOptions.builder()
+                .setMaxResults(2)
+                .setScoreThreshold(0.3f)
+                .build();
+        try {
+            objectDetector = ObjectDetector.createFromFileAndOptions(
+                    this,
+                    "tiny_original.tflite",
+                    options
+            );
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+    private void executeObjectDetection(Bitmap bitmap) throws IOException {
+        TensorImage tensorImage = TensorImage.fromBitmap(bitmap);
+        List<Detection> results = objectDetector.detect(tensorImage);
+
+        debugPrint(results);
+    }
+
+    private void debugPrint(List<Detection> results) {
+        for (Detection result: results) {
+            RectF box = result.getBoundingBox();
+
+            Log.d(TAG, "Detected object: ${i} ");
+            Log.d(TAG, "  boundingBox: (${box.left}, ${box.top}) - (${box.right},${box.bottom})");
+
+            for (int j = 0; j < result.getCategories().size(); j++) {
+                Category category = result.getCategories().get(j);
+                Log.d(TAG, "    Label " + j + ": " + category.getLabel());
+                int confidence = (int) (category.getScore() * 100);
+                Log.d(TAG, "    Confidence: " + confidence + "%");
+            }
+        }
     }
 
 
