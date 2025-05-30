@@ -60,7 +60,11 @@ class PhotoPoint:
         return self.point_pixels
     
     def get_photo_settings(self):
-        return self.photo_settings  
+        return self.photo_settings
+
+    def set_point_pixels(self, pixel_x, pixel_y):
+        self.point_pixels[0] = pixel_x
+        self.point_pixels[1] = pixel_y
 
 class BackProjector:
     def __init__(self, camera: Camera):
