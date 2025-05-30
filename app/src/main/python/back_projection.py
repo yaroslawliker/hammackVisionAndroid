@@ -3,7 +3,6 @@
 ###
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 
 class Camera:
     def __init__(self, fx, fy, skew=0):
@@ -104,43 +103,3 @@ class BackProjector:
         point_3d = self.camera.position + t0 * direction_world
         
         return point_3d
-    
-if __name__ == "__main__":
-
-    # In centimeters
-
-    # Camera
-    pixel_size_cm = 0.0018
-    # fx = fy = f / pixel_size_cm = 2.73 / 0.0018 ≈ 1516.67
-    f = 27.3 / 0.0018
-    cameraY = 5.75
-
-    # Camera orientation
-    rotation = Rotation.from_euler('xyz', [-1, 0, 0], degrees=True)
-    camera_orientation = rotation.as_matrix()
-
-    galaxy50ACamera = Camera(f, f)
-
-    galaxy50ACamera.set_position([0, cameraY, 0])
-    galaxy50ACamera.set_orientation(camera_orientation)
-
-    back_projector = BackProjector(galaxy50ACamera)
-
-    # Photo settings
-    size_pixel_x = 1280
-    size_pixel_y = 960
-
-    photo = Photo(size_pixel_x, size_pixel_y)
-
-    # Photo (cola1)
-    photo_point1 = PhotoPoint(742, 600, photo)
-
-    point_3d = back_projector.back_project(photo_point1)
-    print("3D point in world coordinates:", point_3d)
-
-    # Photo (cola1)
-    photo_point2 = PhotoPoint(1080, 672, photo)
-
-    point_3d = back_projector.back_project(photo_point2)
-    print("3D point in world coordinates:", point_3d)
-

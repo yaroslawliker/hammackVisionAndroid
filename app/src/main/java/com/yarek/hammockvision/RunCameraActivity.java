@@ -13,7 +13,6 @@ import android.util.Size;
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
@@ -24,7 +23,6 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-import androidx.lifecycle.LifecycleOwner;
 
 import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
@@ -53,6 +51,7 @@ public class RunCameraActivity extends AppCompatActivity {
 
     static final int MODEL_INPUT_SIZE = 416;
     static final int MODEL_INPUT_CHANNELS = 3;
+    BackProjector backProjector;
 
     int analyzeEveryFrames = 60;
     int framesPassed = 0;
@@ -75,17 +74,8 @@ public class RunCameraActivity extends AppCompatActivity {
             }
         }, ContextCompat.getMainExecutor(this));
 
-        initInterpreter();
-
-        if (!Python.isStarted()) {
-            Python.start(new AndroidPlatform(this));
-        }
-
-        Python py = Python.getInstance();
-        PyObject pyObj = py.getModule("script");  // Ім’я файлу без .py
-        PyObject result = pyObj.callAttr("add2", 5, 7);
-
-        Log.d(TAG, "Python result: " + String.valueOf(result.toFloat()));
+        initTensorFlowLiteInterpreter();
+        initBackProjector();
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -94,12 +84,31 @@ public class RunCameraActivity extends AppCompatActivity {
         });
     }
 
-    private void initInterpreter() {
+    private void initTensorFlowLiteInterpreter() {
         try {
             tfliteInterpreter = new Interpreter(FileUtil.loadMappedFile(this, "yolov4-tiny-416.tflite"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private void initBackProjector() {
+        if (!Python.isStarted()) {
+            Python.start(new AndroidPlatform(this));
+        }
+
+        Python python = Python.getInstance();
+        float[] rotations = {42.6f, 4, 0};
+        int[] resolution = {1280, 960};
+        backProjector = new BackProjector(
+                python,
+                new CameraInternalParams(
+                        1035.990987371761, 1037.5660299778167,
+                        647.1976126037574, 501.28397224530966,
+                        resolution),
+                new CameraPosition(223.3, rotations)
+        );
+        // TODO: change from hardcoded
     }
 
     void bindUseCases(@NonNull ProcessCameraProvider cameraProvider) {
@@ -117,6 +126,7 @@ public class RunCameraActivity extends AppCompatActivity {
 
             if (framesPassed >= analyzeEveryFrames) {
                 runInference(bitmap);
+                backProjectAndDebug(new float[]{791, 437});
             }
                 framesPassed++;
 
@@ -146,9 +156,16 @@ public class RunCameraActivity extends AppCompatActivity {
         List<DetectionResult> results = parseOutputs(output[0]);
         List<DetectionResult> finalResults = nonMaxSuppression(results, 0.45f);
 
-//        debugPrint(finalResults);
-//        overlayView.setResults(finalResults);
+    }
 
+    private void backProjectAndDebug(float[] point2D) {
+        float[] point3D = backProjector.backProject(point2D);
+        StringBuilder pointStr = new StringBuilder("Point3D: ");
+        for (int i = 0; i < 3; i++) {
+            pointStr.append(point3D[i]);
+            pointStr.append(" ");
+        }
+        Log.d(TAG, pointStr.toString());
     }
 
     private ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {

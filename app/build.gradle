@@ -18,6 +18,7 @@ android {
         python {
             pip {
                 install "numpy"
+                install "scipy"
             }
         }
 
