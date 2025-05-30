@@ -44,6 +44,8 @@ import java.util.concurrent.Executors;
 public class RunCameraActivity extends AppCompatActivity {
 
     PreviewView previewView;
+    OverlayView overlayView;
+
     Interpreter tfliteInterpreter;
 
     static final int MODEL_INPUT_SIZE = 416;
@@ -59,6 +61,7 @@ public class RunCameraActivity extends AppCompatActivity {
         setContentView(R.layout.activity_run_camera);
 
         previewView = findViewById(R.id.runCameraPreview);
+        overlayView = findViewById(R.id.overlayView);
 
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
         cameraProviderFuture.addListener(() -> {
@@ -131,6 +134,8 @@ public class RunCameraActivity extends AppCompatActivity {
         List<DetectionResult> finalResults = nonMaxSuppression(results, 0.45f);
 
         debugPrint(finalResults);
+        overlayView.setResults(finalResults);
+
     }
 
     private ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
@@ -204,7 +209,7 @@ public class RunCameraActivity extends AppCompatActivity {
         }
     }
 
-    private static class DetectionResult {
+    public static class DetectionResult {
         RectF bbox;
         String label;
         float confidence;
