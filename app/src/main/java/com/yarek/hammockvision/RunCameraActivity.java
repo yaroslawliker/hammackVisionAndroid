@@ -26,6 +26,9 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.LifecycleOwner;
 
+import com.chaquo.python.PyObject;
+import com.chaquo.python.Python;
+import com.chaquo.python.android.AndroidPlatform;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import org.tensorflow.lite.Interpreter;
@@ -73,6 +76,16 @@ public class RunCameraActivity extends AppCompatActivity {
         }, ContextCompat.getMainExecutor(this));
 
         initInterpreter();
+
+        if (!Python.isStarted()) {
+            Python.start(new AndroidPlatform(this));
+        }
+
+        Python py = Python.getInstance();
+        PyObject pyObj = py.getModule("script");  // Ім’я файлу без .py
+        PyObject result = pyObj.callAttr("add2", 5, 7);
+
+        Log.d(TAG, "Python result: " + String.valueOf(result.toFloat()));
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -133,8 +146,8 @@ public class RunCameraActivity extends AppCompatActivity {
         List<DetectionResult> results = parseOutputs(output[0]);
         List<DetectionResult> finalResults = nonMaxSuppression(results, 0.45f);
 
-        debugPrint(finalResults);
-        overlayView.setResults(finalResults);
+//        debugPrint(finalResults);
+//        overlayView.setResults(finalResults);
 
     }
 

@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
+    id 'com.chaquo.python'
 }
+
 
 android {
     namespace 'com.yarek.hammockvision'
@@ -12,6 +14,17 @@ android {
         targetSdk 35
         versionCode 1
         versionName "1.0"
+
+        python {
+            pip {
+                install "numpy"
+            }
+        }
+
+        ndk {
+            // On Apple silicon, you can omit x86_64.
+            abiFilters "arm64-v8a", "x86_64"
+        }
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -29,6 +42,12 @@ android {
     buildFeatures {
         viewBinding true
     }
+}
+
+chaquopy {
+    defaultConfig { }
+    productFlavors { }
+    sourceSets { }
 }
 
 dependencies {
