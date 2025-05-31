@@ -43,7 +43,7 @@ public class OverlayView extends View {
         super.onDraw(canvas);
 
         for (Detection result : results) {
-            RectF coords = new RectF(result.normalizedX1, result.normalizedX2, result.normalizedY1, result.normalizedY2);
+            RectF coords = new RectF(result.pixelStartX, result.pixelStartY, result.pixelEndX, result.pixelEndY);
             RectF box = scaleRect(coords);
             canvas.drawRect(box, boxPaint);
             canvas.drawText(result.classId + " " + String.format("%.2f", result.confidence), box.left, box.top - 10, textPaint);
