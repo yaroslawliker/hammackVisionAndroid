@@ -7,6 +7,8 @@ import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
 
+import com.yarek.hammockvision.objectdetection.Detection;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,7 +16,7 @@ public class OverlayView extends View {
 
     private final Paint boxPaint = new Paint();
     private final Paint textPaint = new Paint();
-    private List<RunCameraActivity.DetectionResult> results = new ArrayList<>();
+    private List<Detection> results = new ArrayList<>();
 
     public OverlayView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -31,24 +33,24 @@ public class OverlayView extends View {
         textPaint.setStyle(Paint.Style.FILL);
     }
 
-    public void setResults(List<RunCameraActivity.DetectionResult> results) {
+    public void setResults(List<Detection> results) {
         this.results = results;
-        postInvalidate(); // Перемалювати view
+        postInvalidate();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        for (RunCameraActivity.DetectionResult result : results) {
-            RectF box = scaleRect(result.bbox);
+        for (Detection result : results) {
+            RectF coords = new RectF(result.normalizedX1, result.normalizedX2, result.normalizedY1, result.normalizedY2);
+            RectF box = scaleRect(coords);
             canvas.drawRect(box, boxPaint);
-            canvas.drawText(result.label + " " + String.format("%.2f", result.confidence), box.left, box.top - 10, textPaint);
+            canvas.drawText(result.classId + " " + String.format("%.2f", result.confidence), box.left, box.top - 10, textPaint);
         }
     }
 
     private RectF scaleRect(RectF rect) {
-        // Масштабування координат до розміру екрану
         float scaleX = (float) getWidth() / RunCameraActivity.MODEL_INPUT_SIZE;
         float scaleY = (float) getHeight() / RunCameraActivity.MODEL_INPUT_SIZE;
 
