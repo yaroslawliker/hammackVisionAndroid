@@ -3,6 +3,8 @@ package com.yarek.hammockvision;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Point;
+import android.graphics.PointF;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
@@ -17,6 +19,8 @@ public class OverlayView extends View {
     private final Paint boxPaint = new Paint();
     private final Paint textPaint = new Paint();
     private List<Detection> results = new ArrayList<>();
+    private RectF coords = new RectF();
+    private Point previewSize;
 
     public OverlayView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -38,27 +42,43 @@ public class OverlayView extends View {
         postInvalidate();
     }
 
+    public void setPreviewSize(int w, int h) {
+        previewSize = new Point(w, h);
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
         for (Detection result : results) {
-            RectF coords = new RectF(result.pixelStartX, result.pixelStartY, result.pixelEndX, result.pixelEndY);
-            RectF box = scaleRect(coords);
-            canvas.drawRect(box, boxPaint);
-            canvas.drawText(result.classId + " " + String.format("%.2f", result.confidence), box.left, box.top - 10, textPaint);
+
+            coords.left = result.pixelStartX;
+            coords.top = result.pixelStartY;
+            coords.right = result.pixelEndX;
+            coords.bottom = result.pixelEndY;
+
+            RectF rescaled = scaleRectF(coords, 640, previewSize);
+
+            canvas.drawRect(rescaled, boxPaint);
+            canvas.drawText(result.classId + " " + String.format("%.2f", result.confidence), rescaled.left, rescaled.top - 10, textPaint);
         }
     }
 
-    private RectF scaleRect(RectF rect) {
-        float scaleX = (float) getWidth() / RunCameraActivity.MODEL_INPUT_SIZE;
-        float scaleY = (float) getHeight() / RunCameraActivity.MODEL_INPUT_SIZE;
+    private RectF scaleRectF(RectF rect, int detectSize, Point neededSize) {
+        int w = neededSize.x;
+        int h = neededSize.y;
 
-        return new RectF(
-                rect.left * scaleX,
-                rect.top * scaleY,
-                rect.right * scaleX,
-                rect.bottom * scaleY
+        float scaleBack = (float) h / detectSize;
+
+        RectF unscaled = new RectF(
+                rect.left * scaleBack,
+                rect.top * scaleBack,
+                rect.right * scaleBack,
+                rect.bottom * scaleBack
         );
+
+        float offsetX = (w - h) / 2f;
+        unscaled.offset(offsetX, 0);
+
+        return unscaled;
     }
 }

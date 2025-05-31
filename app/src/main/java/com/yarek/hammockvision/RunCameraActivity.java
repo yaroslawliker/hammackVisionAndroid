@@ -18,14 +18,12 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
-import android.util.Size;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
-import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -38,16 +36,14 @@ import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.yarek.hammockvision.objectdetection.Detection;
+import com.yarek.hammockvision.objectdetection.ObjectDetector;
+import com.yarek.hammockvision.objectdetection.Yolov7TinyObjectDetector;
 
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.common.FileUtil;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -58,6 +54,7 @@ public class RunCameraActivity extends AppCompatActivity {
     OverlayView overlayView;
 
     Interpreter tfliteInterpreter;
+    ObjectDetector objectDetector;
 
     static final int MODEL_INPUT_SIZE = 640;
     static final int MODEL_INPUT_CHANNELS = 3;
@@ -84,7 +81,7 @@ public class RunCameraActivity extends AppCompatActivity {
             }
         }, ContextCompat.getMainExecutor(this));
 
-        initTensorFlowLiteInterpreter();
+        initTensorFlowLiteInterpreterAndDetector();
         initBackProjector();
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
@@ -94,15 +91,14 @@ public class RunCameraActivity extends AppCompatActivity {
         });
     }
 
-    private void initTensorFlowLiteInterpreter() {
+    private void initTensorFlowLiteInterpreterAndDetector() {
         try {
             tfliteInterpreter = new Interpreter(FileUtil.loadMappedFile(this, "yolov7-tiny.tflite"));
+            objectDetector = new Yolov7TinyObjectDetector(640, tfliteInterpreter);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
-        int[] outputShape = tfliteInterpreter.getOutputTensor(0).shape();
-        Log.d("TFLite", Arrays.toString(outputShape));
     }
 
     private void initBackProjector() {
@@ -129,19 +125,21 @@ public class RunCameraActivity extends AppCompatActivity {
 
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                .setTargetResolution(new Size(1280, 960))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build();
 
         Executor executor = Executors.newSingleThreadExecutor();
         imageAnalysis.setAnalyzer(executor, imageProxy -> {
-            Bitmap bitmap = resizeImageForTFLite(imageProxy);
+            Bitmap bitmap = imageProxy.toBitmap();
 
             if (framesPassed >= analyzeEveryFrames) {
-                runInference(bitmap);
+                List<Detection> detections = objectDetector.runInference(bitmap);
+                overlayView.setResults(detections);
+                overlayView.setPreviewSize(previewView.getWidth(), previewView.getHeight());
+
 //                backProjectAndDebug(new float[]{791, 437});
             }
-                framesPassed++;
+            framesPassed++;
 
             imageProxy.close();
         });
@@ -154,61 +152,6 @@ public class RunCameraActivity extends AppCompatActivity {
         cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
     }
 
-    private Bitmap resizeImageForTFLite(ImageProxy imageProxy) {
-        Bitmap original = imageProxy.toBitmap();
-        int size = Math.min(original.getWidth(), original.getHeight());
-        Bitmap cropped = Bitmap.createBitmap(original, (original.getWidth() - size) / 2, (original.getHeight() - size) / 2, size, size);
-        return Bitmap.createScaledBitmap(cropped, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, true);
-    }
-
-    private void runInference(Bitmap bitmap) {
-        ByteBuffer inputBuffer = convertBitmapToByteBuffer(bitmap);
-        float[][] output = new float[1][7];
-        tfliteInterpreter.run(inputBuffer, output);
-//        saveBitmapToGallery(getApplicationContext(), bitmap, new RectF(
-//                    output[0][1],
-//                    output[0][2],
-//                    output[0][3],
-//                    output[0][4]
-//                        ),
-//                "my_image_" + System.currentTimeMillis() + ".png");
-
-
-        for (float[] detection: output){
-            Log.d("Detection", Arrays.toString(detection));
-            float confidence = 1 / (1 + (float)Math.exp(-detection[4]));
-            Log.d("Detection", "scoreSigm" + String.valueOf(confidence));
-        }
-
-//        Set<String> uniqueBoxes = new HashSet<>();
-//        for (int i = 0; i < 100; i++) {
-//            float[] detection = output[i]; // або output[i] залежно від форми
-//            String key = Arrays.toString(detection);
-//            uniqueBoxes.add(key);
-//        }
-
-        List<Detection> results = parseOutputs(output);
-//        List<Detection> finalResults = nonMaxSuppression(results, 0.45f);
-
-        List<Detection> viewSizeResults = new ArrayList<>();
-
-        for (Detection result: results) {
-            RectF detect = new RectF(
-                    result.pixelStartX, result.pixelStartY,
-                    result.pixelEndX, result.pixelEndY
-                    );
-            RectF viewScale = scaleRectF(detect, MODEL_INPUT_SIZE, new Point(previewView.getWidth(), previewView.getHeight()));
-
-            viewSizeResults.add(new Detection(
-                    viewScale.left, viewScale.top,
-                    viewScale.right, viewScale.bottom,
-                    result.confidence, result.classId
-                    ));
-        }
-        overlayView.setResults(results);
-
-    }
-
     private void backProjectAndDebug(float[] point2D) {
         float[] point3D = backProjector.backProject(point2D);
         StringBuilder pointStr = new StringBuilder("Point3D: ");
@@ -219,70 +162,6 @@ public class RunCameraActivity extends AppCompatActivity {
         Log.d(TAG, pointStr.toString());
     }
 
-    private ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
-        ByteBuffer buffer = ByteBuffer.allocateDirect(4 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * MODEL_INPUT_CHANNELS);
-        buffer.order(ByteOrder.nativeOrder());
-
-        int[] pixels = new int[MODEL_INPUT_SIZE * MODEL_INPUT_SIZE];
-        bitmap.getPixels(pixels, 0, MODEL_INPUT_SIZE, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
-
-        // Спочатку всі R, потім всі G, потім всі B
-        for (int c = 0; c < 3; c++) {
-            for (int i = 0; i < pixels.length; i++) {
-                int pixel = pixels[i];
-                float value;
-                switch (c) {
-                    case 0: value = ((pixel >> 16) & 0xFF) / 255.f; break; // R
-                    case 1: value = ((pixel >> 8) & 0xFF) / 255.f; break;  // G
-                    case 2: value = (pixel & 0xFF) / 255.f; break;         // B
-                    default: value = 0;
-                }
-                buffer.putFloat(value);
-            }
-        }
-
-        return buffer;
-    }
-
-
-    private List<Detection> parseOutputs(float[][] output) {
-        List<Detection> results = new ArrayList<>();
-        // Просто зберігаємо всі бокси, або якщо хочеш - можна додати якийсь фіктивний confidence = 1
-        for (float[] detectionArray : output) {
-
-            float pixelStartX = detectionArray[1];
-            float pixelStartY = detectionArray[2];
-            float pixelEndX = detectionArray[3];
-            float pixelEndY = detectionArray[4];
-            int classId = (int)detectionArray[5];
-            float score = detectionArray[6];
-
-            if (score < 0.2) continue;
-
-
-            Detection detection = new Detection(
-                    pixelStartX, pixelStartY,
-                    pixelEndX, pixelEndY,
-                    score,
-                    classId
-            );
-
-            results.add(detection);
-        }
-//        debugPrint(results);
-        return results;
-    }
-
-    private float iou(RectF a, RectF b) {
-        float left = Math.max(a.left, b.left);
-        float top = Math.max(a.top, b.top);
-        float right = Math.min(a.right, b.right);
-        float bottom = Math.min(a.bottom, b.bottom);
-        float intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
-        float union = a.width() * a.height() + b.width() * b.height() - intersection;
-        return intersection / union;
-    }
-
     private void debugPrint(List<Detection> results) {
         for (int i = 0; i < results.size(); i++) {
             Detection r = results.get(i);
@@ -290,17 +169,6 @@ public class RunCameraActivity extends AppCompatActivity {
             Log.d(TAG, String.format("  boundingBox: (%.2f, %.2f) - (%.2f, %.2f)", r.pixelStartX, r.pixelStartY, r.pixelEndX, r.pixelEndY));
             Log.d(TAG, "  Label: " + r.classId);
             Log.d(TAG, String.format("  Confidence: %.2f", r.confidence));
-        }
-    }
-
-    public static class DetectionResult {
-        RectF bbox;
-        String label;
-        float confidence;
-        DetectionResult(RectF bbox, String label, float confidence) {
-            this.bbox = bbox;
-            this.label = label;
-            this.confidence = confidence;
         }
     }
 
@@ -344,29 +212,5 @@ public class RunCameraActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-
-    private RectF scaleRectF(RectF rect, int detectSize, Point neededSize) {
-        int w = neededSize.x;
-        int h = neededSize.y;
-
-        float scaleBack = (float) h / detectSize;
-
-        RectF unscaled = new RectF(
-                rect.left * scaleBack,
-                rect.top * scaleBack,
-                rect.right * scaleBack,
-                rect.bottom * scaleBack
-        );
-
-        float offsetX = (w - h) / 2f;
-        unscaled.offset(offsetX, 0);
-
-        return unscaled;
-    }
-
-
-
-
-
 
 }

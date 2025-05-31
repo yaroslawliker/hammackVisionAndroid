@@ -42,7 +42,7 @@ public class Yolov7TinyObjectDetector implements ObjectDetector {
             int classId = (int)detectionArray[5];
             float score = detectionArray[6];
 
-            if (score < 0.2) continue;
+            if (score < 0.35) continue;
 
 
             Detection detection = new Detection(
@@ -59,8 +59,9 @@ public class Yolov7TinyObjectDetector implements ObjectDetector {
 
     @Override
     public List<Detection> runInference(Bitmap bitmap) {
-        ByteBuffer inputBuffer = convertBitmapToByteBuffer(bitmap);
-        float[][] output = new float[1][7];
+        Bitmap prepared = prepareImage(bitmap);
+        ByteBuffer inputBuffer = convertBitmapToByteBuffer(prepared);
+        float[][] output = new float[100][7];
         tfliteInterpreter.run(inputBuffer, output);
         return parseOutput(output);
     }
