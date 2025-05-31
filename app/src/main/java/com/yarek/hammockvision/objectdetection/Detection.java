@@ -3,25 +3,25 @@ package com.yarek.hammockvision.objectdetection;
 public class Detection {
 
     public Detection(
-            float normalizedX1, float normalizedY1,
-            float normalizedX2, float normalizedY2,
+            float pixelStartX, float pixelStartY,
+            float pixelEndX, float normalizedY2,
             float confidence, int classId
     ) {
-        this.normalizedX1 = normalizedX1;
-        this.normalizedY1 = normalizedY1;
+        this.pixelStartX = pixelStartX;
+        this.pixelStartY = pixelStartY;
 
-        this.normalizedX2 = normalizedX2;
-        this.normalizedY2 = normalizedY2;
+        this.pixelEndX = pixelEndX;
+        this.pixelEndY = normalizedY2;
 
         this.confidence = confidence;
 
         this.classId = classId;
     }
 
-    public float normalizedX1;
-    public float normalizedY1;
-    public float normalizedX2;
-    public float normalizedY2;
+    public float pixelStartX;
+    public float pixelStartY;
+    public float pixelEndX;
+    public float pixelEndY;
     public float confidence;
     public int classId;
 

@@ -4,9 +4,19 @@ package com.yarek.hammockvision;
 
 import static android.content.ContentValues.TAG;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
+import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.RectF;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.util.Size;
 
@@ -24,21 +34,21 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.yarek.hammockvision.objectdetection.Detection;
 
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.common.FileUtil;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -49,11 +59,11 @@ public class RunCameraActivity extends AppCompatActivity {
 
     Interpreter tfliteInterpreter;
 
-    static final int MODEL_INPUT_SIZE = 416;
+    static final int MODEL_INPUT_SIZE = 640;
     static final int MODEL_INPUT_CHANNELS = 3;
     BackProjector backProjector;
 
-    int analyzeEveryFrames = 60;
+    int analyzeEveryFrames = 30;
     int framesPassed = 0;
 
     @Override
@@ -86,10 +96,13 @@ public class RunCameraActivity extends AppCompatActivity {
 
     private void initTensorFlowLiteInterpreter() {
         try {
-            tfliteInterpreter = new Interpreter(FileUtil.loadMappedFile(this, "yolov4-tiny-416.tflite"));
+            tfliteInterpreter = new Interpreter(FileUtil.loadMappedFile(this, "yolov7-tiny.tflite"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
+        int[] outputShape = tfliteInterpreter.getOutputTensor(0).shape();
+        Log.d("TFLite", Arrays.toString(outputShape));
     }
 
     private void initBackProjector() {
@@ -126,7 +139,7 @@ public class RunCameraActivity extends AppCompatActivity {
 
             if (framesPassed >= analyzeEveryFrames) {
                 runInference(bitmap);
-                backProjectAndDebug(new float[]{791, 437});
+//                backProjectAndDebug(new float[]{791, 437});
             }
                 framesPassed++;
 
@@ -152,9 +165,47 @@ public class RunCameraActivity extends AppCompatActivity {
         ByteBuffer inputBuffer = convertBitmapToByteBuffer(bitmap);
         float[][] output = new float[1][7];
         tfliteInterpreter.run(inputBuffer, output);
+//        saveBitmapToGallery(getApplicationContext(), bitmap, new RectF(
+//                    output[0][1],
+//                    output[0][2],
+//                    output[0][3],
+//                    output[0][4]
+//                        ),
+//                "my_image_" + System.currentTimeMillis() + ".png");
 
-        List<DetectionResult> results = parseOutputs(output[0]);
-        List<DetectionResult> finalResults = nonMaxSuppression(results, 0.45f);
+
+        for (float[] detection: output){
+            Log.d("Detection", Arrays.toString(detection));
+            float confidence = 1 / (1 + (float)Math.exp(-detection[4]));
+            Log.d("Detection", "scoreSigm" + String.valueOf(confidence));
+        }
+
+//        Set<String> uniqueBoxes = new HashSet<>();
+//        for (int i = 0; i < 100; i++) {
+//            float[] detection = output[i]; // або output[i] залежно від форми
+//            String key = Arrays.toString(detection);
+//            uniqueBoxes.add(key);
+//        }
+
+        List<Detection> results = parseOutputs(output);
+//        List<Detection> finalResults = nonMaxSuppression(results, 0.45f);
+
+        List<Detection> viewSizeResults = new ArrayList<>();
+
+        for (Detection result: results) {
+            RectF detect = new RectF(
+                    result.pixelStartX, result.pixelStartY,
+                    result.pixelEndX, result.pixelEndY
+                    );
+            RectF viewScale = scaleRectF(detect, MODEL_INPUT_SIZE, new Point(previewView.getWidth(), previewView.getHeight()));
+
+            viewSizeResults.add(new Detection(
+                    viewScale.left, viewScale.top,
+                    viewScale.right, viewScale.bottom,
+                    result.confidence, result.classId
+                    ));
+        }
+        overlayView.setResults(results);
 
     }
 
@@ -171,6 +222,7 @@ public class RunCameraActivity extends AppCompatActivity {
     private ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
         ByteBuffer buffer = ByteBuffer.allocateDirect(4 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * MODEL_INPUT_CHANNELS);
         buffer.order(ByteOrder.nativeOrder());
+
         int[] pixels = new int[MODEL_INPUT_SIZE * MODEL_INPUT_SIZE];
         bitmap.getPixels(pixels, 0, MODEL_INPUT_SIZE, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
 
@@ -192,42 +244,33 @@ public class RunCameraActivity extends AppCompatActivity {
         return buffer;
     }
 
-    private List<DetectionResult> parseOutputs(float[][] output) {
-        List<DetectionResult> results = new ArrayList<>();
+
+    private List<Detection> parseOutputs(float[][] output) {
+        List<Detection> results = new ArrayList<>();
         // Просто зберігаємо всі бокси, або якщо хочеш - можна додати якийсь фіктивний confidence = 1
-        for (float[] detection : output) {
-            if (detection.length < 4) continue; // додатково перевірити довжину
+        for (float[] detectionArray : output) {
 
-            float cx = detection[0];
-            float cy = detection[1];
-            float w = detection[2];
-            float h = detection[3];
+            float pixelStartX = detectionArray[1];
+            float pixelStartY = detectionArray[2];
+            float pixelEndX = detectionArray[3];
+            float pixelEndY = detectionArray[4];
+            int classId = (int)detectionArray[5];
+            float score = detectionArray[6];
 
-            RectF rect = new RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2);
+            if (score < 0.2) continue;
 
-            // Confidence і label ставимо умовно
-            results.add(new DetectionResult(rect, "unknown", 1.0f));
+
+            Detection detection = new Detection(
+                    pixelStartX, pixelStartY,
+                    pixelEndX, pixelEndY,
+                    score,
+                    classId
+            );
+
+            results.add(detection);
         }
+//        debugPrint(results);
         return results;
-    }
-
-
-
-    private List<DetectionResult> nonMaxSuppression(List<DetectionResult> detections, float iouThreshold) {
-        List<DetectionResult> result = new ArrayList<>();
-        Map<String, List<DetectionResult>> grouped = new HashMap<>();
-        for (DetectionResult d : detections) {
-            grouped.computeIfAbsent(d.label, k -> new ArrayList<>()).add(d);
-        }
-        for (List<DetectionResult> group : grouped.values()) {
-            group.sort((a, b) -> Float.compare(b.confidence, a.confidence));
-            while (!group.isEmpty()) {
-                DetectionResult best = group.remove(0);
-                result.add(best);
-                group.removeIf(d -> iou(d.bbox, best.bbox) > iouThreshold);
-            }
-        }
-        return result;
     }
 
     private float iou(RectF a, RectF b) {
@@ -244,7 +287,7 @@ public class RunCameraActivity extends AppCompatActivity {
         for (int i = 0; i < results.size(); i++) {
             Detection r = results.get(i);
             Log.d(TAG, "Detected object: " + i);
-            Log.d(TAG, String.format("  boundingBox: (%.2f, %.2f) - (%.2f, %.2f)", r.normalizedX1, r.normalizedY1, r.normalizedX2, r.normalizedY2));
+            Log.d(TAG, String.format("  boundingBox: (%.2f, %.2f) - (%.2f, %.2f)", r.pixelStartX, r.pixelStartY, r.pixelEndX, r.pixelEndY));
             Log.d(TAG, "  Label: " + r.classId);
             Log.d(TAG, String.format("  Confidence: %.2f", r.confidence));
         }
@@ -260,4 +303,70 @@ public class RunCameraActivity extends AppCompatActivity {
             this.confidence = confidence;
         }
     }
+
+    public void saveBitmapToGallery(Context context, Bitmap bitmap, RectF box, String displayName) {
+
+        Canvas canvas = new Canvas(bitmap);
+        Paint paint = new Paint();
+        paint.setColor(Color.RED);
+        paint.setAlpha(113);
+        paint.setStyle(Paint.Style.FILL);
+
+        canvas.drawRect(box, paint);
+
+        OutputStream fos;
+        ContentResolver resolver = context.getContentResolver();
+
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, displayName);
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+        values.put(MediaStore.Images.Media.WIDTH, bitmap.getWidth());
+        values.put(MediaStore.Images.Media.HEIGHT, bitmap.getHeight());
+
+        // Для Android Q (API 29) і вище: встановлюємо відносний шлях
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MyAppImages"); // Галерея/Картинки/MyAppImages
+        }
+
+        Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+
+        try {
+            if (uri != null) {
+                fos = resolver.openOutputStream(uri);
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+                if (fos != null) {
+                    fos.flush();
+                    fos.close();
+                }
+                Log.d("SaveToGallery", "Збережено до галереї: " + uri.toString());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private RectF scaleRectF(RectF rect, int detectSize, Point neededSize) {
+        int w = neededSize.x;
+        int h = neededSize.y;
+
+        float scaleBack = (float) h / detectSize;
+
+        RectF unscaled = new RectF(
+                rect.left * scaleBack,
+                rect.top * scaleBack,
+                rect.right * scaleBack,
+                rect.bottom * scaleBack
+        );
+
+        float offsetX = (w - h) / 2f;
+        unscaled.offset(offsetX, 0);
+
+        return unscaled;
+    }
+
+
+
+
+
+
 }
