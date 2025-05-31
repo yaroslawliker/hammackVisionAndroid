@@ -150,7 +150,7 @@ public class RunCameraActivity extends AppCompatActivity {
 
     private void runInference(Bitmap bitmap) {
         ByteBuffer inputBuffer = convertBitmapToByteBuffer(bitmap);
-        float[][][] output = new float[1][2535][4];
+        float[][] output = new float[1][7];
         tfliteInterpreter.run(inputBuffer, output);
 
         List<DetectionResult> results = parseOutputs(output[0]);
@@ -173,11 +173,22 @@ public class RunCameraActivity extends AppCompatActivity {
         buffer.order(ByteOrder.nativeOrder());
         int[] pixels = new int[MODEL_INPUT_SIZE * MODEL_INPUT_SIZE];
         bitmap.getPixels(pixels, 0, MODEL_INPUT_SIZE, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
-        for (int pixel : pixels) {
-            buffer.putFloat(((pixel >> 16) & 0xFF) / 255.f);
-            buffer.putFloat(((pixel >> 8) & 0xFF) / 255.f);
-            buffer.putFloat((pixel & 0xFF) / 255.f);
+
+        // Спочатку всі R, потім всі G, потім всі B
+        for (int c = 0; c < 3; c++) {
+            for (int i = 0; i < pixels.length; i++) {
+                int pixel = pixels[i];
+                float value;
+                switch (c) {
+                    case 0: value = ((pixel >> 16) & 0xFF) / 255.f; break; // R
+                    case 1: value = ((pixel >> 8) & 0xFF) / 255.f; break;  // G
+                    case 2: value = (pixel & 0xFF) / 255.f; break;         // B
+                    default: value = 0;
+                }
+                buffer.putFloat(value);
+            }
         }
+
         return buffer;
     }
 
@@ -229,12 +240,13 @@ public class RunCameraActivity extends AppCompatActivity {
         return intersection / union;
     }
 
-    private void debugPrint(List<DetectionResult> results) {
+    private void debugPrint(List<Detection> results) {
         for (int i = 0; i < results.size(); i++) {
-            DetectionResult r = results.get(i);
+            Detection r = results.get(i);
             Log.d(TAG, "Detected object: " + i);
             Log.d(TAG, String.format("  boundingBox: (%.2f, %.2f) - (%.2f, %.2f)", r.bbox.left, r.bbox.top, r.bbox.right, r.bbox.bottom));
             Log.d(TAG, "  Label: " + r.label);
+            Log.d(TAG, "  Label: " + r.classId);
             Log.d(TAG, String.format("  Confidence: %.2f", r.confidence));
         }
     }
