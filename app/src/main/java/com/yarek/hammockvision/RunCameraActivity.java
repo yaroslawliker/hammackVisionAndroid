@@ -244,8 +244,7 @@ public class RunCameraActivity extends AppCompatActivity {
         for (int i = 0; i < results.size(); i++) {
             Detection r = results.get(i);
             Log.d(TAG, "Detected object: " + i);
-            Log.d(TAG, String.format("  boundingBox: (%.2f, %.2f) - (%.2f, %.2f)", r.bbox.left, r.bbox.top, r.bbox.right, r.bbox.bottom));
-            Log.d(TAG, "  Label: " + r.label);
+            Log.d(TAG, String.format("  boundingBox: (%.2f, %.2f) - (%.2f, %.2f)", r.normalizedX1, r.normalizedY1, r.normalizedX2, r.normalizedY2));
             Log.d(TAG, "  Label: " + r.classId);
             Log.d(TAG, String.format("  Confidence: %.2f", r.confidence));
         }
