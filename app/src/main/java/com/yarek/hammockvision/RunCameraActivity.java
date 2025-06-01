@@ -1,7 +1,5 @@
 package com.yarek.hammockvision;
 
-import static android.content.ContentValues.TAG;
-
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -19,6 +17,7 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -63,6 +62,7 @@ public class RunCameraActivity extends AppCompatActivity {
     Button buttonPlus;
     Button buttonMinus;
     EditText cameraHeightEdit;
+    TextView fpsView;
 
     private final float cameraBtnStep = 0.5f;
 
@@ -70,12 +70,13 @@ public class RunCameraActivity extends AppCompatActivity {
     ObjectDetector objectDetector;
 
     static final int MODEL_INPUT_SIZE = 640;
-    static final int MODEL_INPUT_CHANNELS = 3;
     BackProjector backProjector;
 
-    final int analyzeImageTime = 30;
-    final int captureImageTime = 30;
-    int framesPassed = 0;
+    final long captureImageTimeMillisecond = 5;
+    long lastImageCaptureTime = 0;
+
+    long lastFrameTimeMilliseconds = 0;
+
     int[] resolution = {1280, 960};
 
     @Override
@@ -90,7 +91,11 @@ public class RunCameraActivity extends AppCompatActivity {
         xAngleEdit = findViewById(R.id.x_angle_field);
         buttonPlus = findViewById(R.id.x_angle_plus);
         buttonMinus = findViewById(R.id.x_angle_minus);
+
         cameraHeightEdit = findViewById(R.id.camera_height_edit);
+
+        fpsView = findViewById(R.id.fps_tracker);
+
 
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
         cameraProviderFuture.addListener(() -> {
@@ -137,7 +142,7 @@ public class RunCameraActivity extends AppCompatActivity {
                         1035.990987371761, 1037.5660299778167,
                         647.1976126037574, 501.28397224530966,
                         resolution),
-                new CameraPosition(74.5, rotations)
+                new CameraPosition(75, rotations)
         );
         // TODO: change from hardcoded
     }
@@ -212,28 +217,29 @@ public class RunCameraActivity extends AppCompatActivity {
         imageAnalysis.setAnalyzer(executor, imageProxy -> {
             Bitmap bitmap = imageProxy.toBitmap();
 
-            if (framesPassed % analyzeImageTime == 0) {
 
-                // Processing an inference
-                List<Detection> detectionsAll = objectDetector.runInference(bitmap);
-                List<Detection> detections = extractPersonDetections(detectionsAll);
+            // Processing an inference
+            List<Detection> detectionsAll = objectDetector.runInference(bitmap);
+            List<Detection> detections = extractPersonDetections(detectionsAll);
 
-                // Setting results to overlayView
-                overlayView.setResults(detections);
-                overlayView.setPreviewSize(previewView.getWidth(), previewView.getHeight());
+            // Setting results to overlayView
+            overlayView.setResults(detections);
+            overlayView.setPreviewSize(previewView.getWidth(), previewView.getHeight());
 
-                float[][] points3D = backProjectDetections(detections);
+            float[][] points3D = backProjectDetections(detections);
 
-                if (framesPassed % captureImageTime == 0) {
-                    saveBitmapToGallery(
-                            getApplicationContext(), objectDetector.prepareImage(bitmap),
-                            detections, points3D,
-                            "my_image_" + System.currentTimeMillis() + ".png"
-                            );
-                }
-
+            long currentTime = System.currentTimeMillis();
+            fpsView.setText(String.valueOf(((float)(Math.round((1f/( ((float)(currentTime - lastFrameTimeMilliseconds)) / 1000))*100))/100)));
+            if (currentTime - lastImageCaptureTime > captureImageTimeMillisecond) {
+                lastImageCaptureTime = currentTime;
+                saveBitmapToGallery(
+                        getApplicationContext(), objectDetector.prepareImage(bitmap),
+                        detections, points3D,
+                        "my_image_" + System.currentTimeMillis() + ".png"
+                        );
             }
-            framesPassed++;
+
+            lastFrameTimeMilliseconds = currentTime;
 
             imageProxy.close();
         });
