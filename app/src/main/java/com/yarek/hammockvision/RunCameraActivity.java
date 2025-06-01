@@ -34,6 +34,9 @@ import androidx.core.view.WindowInsetsCompat;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.yarek.hammockvision.backprojection.BackProjector;
+import com.yarek.hammockvision.backprojection.CameraInternalParams;
+import com.yarek.hammockvision.backprojection.CameraPosition;
 import com.yarek.hammockvision.objectdetection.Detection;
 import com.yarek.hammockvision.objectdetection.ObjectDetector;
 import com.yarek.hammockvision.objectdetection.Yolov7TinyObjectDetector;
@@ -153,7 +156,6 @@ public class RunCameraActivity extends AppCompatActivity {
                             );
                 }
 
-//                backProjectAndDebug(new float[]{791, 437});
             }
             framesPassed++;
 
@@ -166,16 +168,6 @@ public class RunCameraActivity extends AppCompatActivity {
 
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
         cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
-    }
-
-    private void backProjectAndDebug(float[] point2D) {
-        float[] point3D = backProjector.backProject(point2D);
-        StringBuilder pointStr = new StringBuilder("Point3D: ");
-        for (int i = 0; i < 3; i++) {
-            pointStr.append(point3D[i]);
-            pointStr.append(" ");
-        }
-        Log.d(TAG, pointStr.toString());
     }
 
     private float[][] backProjectDetections(List<Detection> detections) {
@@ -198,17 +190,6 @@ public class RunCameraActivity extends AppCompatActivity {
         }
 
         return points3D;
-    }
-
-
-    private void debugPrint(List<Detection> results) {
-        for (int i = 0; i < results.size(); i++) {
-            Detection r = results.get(i);
-            Log.d(TAG, "Detected object: " + i);
-            Log.d(TAG, String.format("  boundingBox: (%.2f, %.2f) - (%.2f, %.2f)", r.pixelStartX, r.pixelStartY, r.pixelEndX, r.pixelEndY));
-            Log.d(TAG, "  Label: " + r.classId);
-            Log.d(TAG, String.format("  Confidence: %.2f", r.confidence));
-        }
     }
 
     public void saveBitmapToGallery(Context context, Bitmap bitmap,
