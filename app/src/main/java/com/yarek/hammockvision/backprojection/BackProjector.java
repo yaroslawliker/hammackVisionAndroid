@@ -1,4 +1,4 @@
-package com.yarek.hammockvision;
+package com.yarek.hammockvision.backprojection;
 
 import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
@@ -62,7 +62,7 @@ public class BackProjector {
 
 
 
-    float[] backProject(float[] point2D) {
+    public float[] backProject(float[] point2D) {
 
         photoPoint.callAttr("set_point_pixels", point2D[0], point2D[1]);
 

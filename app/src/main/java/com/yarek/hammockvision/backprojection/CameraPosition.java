@@ -1,11 +1,11 @@
-package com.yarek.hammockvision;
+package com.yarek.hammockvision.backprojection;
 
 /**
  * Class describes camera y and rotation
  */
 public class CameraPosition {
 
-    CameraPosition(double y, float[] eulerRotationAngles) {
+    public CameraPosition(double y, float[] eulerRotationAngles) {
         this.y = y;
         this.eulerRotationAngles = eulerRotationAngles;
     }

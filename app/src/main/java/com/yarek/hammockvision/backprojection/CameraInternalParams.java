@@ -1,4 +1,4 @@
-package com.yarek.hammockvision;
+package com.yarek.hammockvision.backprojection;
 
 /**
  * Class describes camera matrix with fx, fy, skew, u, v
@@ -14,7 +14,7 @@ public class CameraInternalParams {
     public double skew = 0;
 
 
-    CameraInternalParams(double fx, double fy, double u, double v, int[] resolution) {
+    public CameraInternalParams(double fx, double fy, double u, double v, int[] resolution) {
         this.fx = fx;
         this.fy = fy;
         this.u = u;
@@ -24,7 +24,7 @@ public class CameraInternalParams {
     }
 
     // TODO: move into a separate file
-    CameraInternalParams() {
+    public CameraInternalParams() {
         this.fx = 1035.990987371761;
         this.fy = 1037.5660299778167;
         this.u = 647.1976126037574;
@@ -38,7 +38,7 @@ public class CameraInternalParams {
     /**
      * Sets the new resolution, adoption other params
      */
-    void stretchResolution(int newWidth, int newHeight) {
+    public void stretchResolution(int newWidth, int newHeight) {
 
         float scaleX = (float)newWidth / this.resolution[0];
         float scaleY = (float)newHeight / this.resolution[1];
@@ -53,7 +53,7 @@ public class CameraInternalParams {
         this.resolution[1] = newHeight;
     }
 
-    int[] getResolution() {
+    public int[] getResolution() {
         return resolution;
     }
 
