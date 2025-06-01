@@ -1,5 +1,3 @@
-// Уточнений Java-код RunCameraActivity з правильним постпроцесингом для YOLOv7 TFLite
-
 package com.yarek.hammockvision;
 
 import static android.content.ContentValues.TAG;
@@ -64,6 +62,7 @@ public class RunCameraActivity extends AppCompatActivity {
     EditText xAngleEdit;
     Button buttonPlus;
     Button buttonMinus;
+    EditText cameraHeightEdit;
 
     private final float cameraBtnStep = 0.5f;
 
@@ -91,6 +90,7 @@ public class RunCameraActivity extends AppCompatActivity {
         xAngleEdit = findViewById(R.id.x_angle_field);
         buttonPlus = findViewById(R.id.x_angle_plus);
         buttonMinus = findViewById(R.id.x_angle_minus);
+        cameraHeightEdit = findViewById(R.id.camera_height_edit);
 
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
         cameraProviderFuture.addListener(() -> {
@@ -101,43 +101,11 @@ public class RunCameraActivity extends AppCompatActivity {
             }
         }, ContextCompat.getMainExecutor(this));
 
-        xAngleEdit.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) { }
-
-            @Override
-            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) { }
-
-            @Override
-            public void afterTextChanged(Editable editable) {
-                try {
-                    float value = Float.parseFloat(editable.toString());
-                    backProjector.setXAngle(value);
-                } catch (NumberFormatException e) {
-                    Toast.makeText(getApplicationContext(), "Please write a number", Toast.LENGTH_SHORT).show();
-//                    xAngleEdit.setText(0);
-                }
-            }
-        });
-
-        buttonPlus.setOnClickListener(v -> {
-            float currentValue = Float.parseFloat(xAngleEdit.getText().toString());
-            if (currentValue < 90) {
-                currentValue += cameraBtnStep;
-                xAngleEdit.setText(String.valueOf(currentValue));
-            }
-        });
-
-        buttonMinus.setOnClickListener(v -> {
-            double currentValue = Double.parseDouble(xAngleEdit.getText().toString());
-            if (currentValue - cameraBtnStep >= -90) {
-                currentValue -= cameraBtnStep;
-                xAngleEdit.setText(String.valueOf(currentValue));
-            }
-        });
-
         initTensorFlowLiteInterpreterAndDetector();
         initBackProjector();
+
+        initXAngleUI();
+        initCameraHeightUI();
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -172,6 +140,64 @@ public class RunCameraActivity extends AppCompatActivity {
                 new CameraPosition(74.5, rotations)
         );
         // TODO: change from hardcoded
+    }
+
+    private void initXAngleUI() {
+
+        xAngleEdit.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) { }
+
+            @Override
+            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) { }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                try {
+                    float value = Float.parseFloat(editable.toString());
+                    backProjector.setXAngle(value);
+                } catch (NumberFormatException e) {
+                    Toast.makeText(getApplicationContext(), "Please write a number", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        buttonPlus.setOnClickListener(v -> {
+            float currentValue = Float.parseFloat(xAngleEdit.getText().toString());
+            if (currentValue < 90) {
+                currentValue += cameraBtnStep;
+                xAngleEdit.setText(String.valueOf(currentValue));
+            }
+        });
+
+        buttonMinus.setOnClickListener(v -> {
+            double currentValue = Double.parseDouble(xAngleEdit.getText().toString());
+            if (currentValue - cameraBtnStep >= -90) {
+                currentValue -= cameraBtnStep;
+                xAngleEdit.setText(String.valueOf(currentValue));
+            }
+        });
+
+    }
+
+    private void initCameraHeightUI() {
+        cameraHeightEdit.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) { }
+
+            @Override
+            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) { }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                try {
+                    float value = Float.parseFloat(editable.toString());
+                    backProjector.setCameraHeight(value);
+                } catch (NumberFormatException e) {
+                    Toast.makeText(getApplicationContext(), "Please write a number", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
 
     void bindUseCases(@NonNull ProcessCameraProvider cameraProvider) {

@@ -74,6 +74,11 @@ public class BackProjector {
                 rotationMatrix);
     }
 
+    public void setCameraHeight(float height) {
+        pyCamera.callAttr("set_position",
+                python.getModule("numpy").get("array").call(new double[]{0f, height, 0f}));
+    }
+
     public float[] backProject(float[] point2D) {
 
         photoPoint.callAttr("set_point_pixels", point2D[0], point2D[1]);
