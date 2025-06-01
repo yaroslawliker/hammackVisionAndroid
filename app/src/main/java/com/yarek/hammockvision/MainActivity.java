@@ -19,8 +19,6 @@ import androidx.core.view.WindowInsetsCompat;
 public class MainActivity extends AppCompatActivity {
 
     Button runCameraButton;
-    Button calibrateCameraButton;
-    Button configureCameraButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,8 +29,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         runCameraButton = findViewById(R.id.run_button);
-        calibrateCameraButton = findViewById(R.id.calibrate_button);
-        configureCameraButton = findViewById(R.id.configure_button);
 
         runCameraButton.setOnClickListener(
                 v -> {

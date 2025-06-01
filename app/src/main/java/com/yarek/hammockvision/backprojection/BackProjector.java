@@ -60,7 +60,19 @@ public class BackProjector {
         pyBackProjector = backProjectionModule.get("BackProjector").call(pyCamera);
     }
 
+    public void setXAngle(float xAngle) {
+        PyObject scipySpatialTransform = python.getModule("scipy.spatial.transform");
+        PyObject rotationClass = scipySpatialTransform.get("Rotation");
 
+        float[] eulerRotationAngles = {xAngle, 0, 0};
+
+        PyObject eulerArray = python.getModule("numpy").get("array").call(eulerRotationAngles);
+        PyObject rotationObj = rotationClass.callAttr("from_euler", "xyz", eulerArray, true);
+        PyObject rotationMatrix = rotationObj.callAttr("as_matrix");
+
+        pyCamera.callAttr("set_orientation",
+                rotationMatrix);
+    }
 
     public float[] backProject(float[] point2D) {
 

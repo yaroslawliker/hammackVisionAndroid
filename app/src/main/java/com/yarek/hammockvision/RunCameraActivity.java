@@ -16,7 +16,12 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -56,6 +61,12 @@ public class RunCameraActivity extends AppCompatActivity {
     PreviewView previewView;
     OverlayView overlayView;
 
+    EditText xAngleEdit;
+    Button buttonPlus;
+    Button buttonMinus;
+
+    private final float cameraBtnStep = 0.5f;
+
     Interpreter tfliteInterpreter;
     ObjectDetector objectDetector;
 
@@ -77,6 +88,10 @@ public class RunCameraActivity extends AppCompatActivity {
         previewView = findViewById(R.id.runCameraPreview);
         overlayView = findViewById(R.id.overlayView);
 
+        xAngleEdit = findViewById(R.id.x_angle_field);
+        buttonPlus = findViewById(R.id.x_angle_plus);
+        buttonMinus = findViewById(R.id.x_angle_minus);
+
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
         cameraProviderFuture.addListener(() -> {
             try {
@@ -85,6 +100,41 @@ public class RunCameraActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         }, ContextCompat.getMainExecutor(this));
+
+        xAngleEdit.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) { }
+
+            @Override
+            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) { }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                try {
+                    float value = Float.parseFloat(editable.toString());
+                    backProjector.setXAngle(value);
+                } catch (NumberFormatException e) {
+                    Toast.makeText(getApplicationContext(), "Please write a number", Toast.LENGTH_SHORT).show();
+//                    xAngleEdit.setText(0);
+                }
+            }
+        });
+
+        buttonPlus.setOnClickListener(v -> {
+            float currentValue = Float.parseFloat(xAngleEdit.getText().toString());
+            if (currentValue < 90) {
+                currentValue += cameraBtnStep;
+                xAngleEdit.setText(String.valueOf(currentValue));
+            }
+        });
+
+        buttonMinus.setOnClickListener(v -> {
+            double currentValue = Double.parseDouble(xAngleEdit.getText().toString());
+            if (currentValue - cameraBtnStep >= -90) {
+                currentValue -= cameraBtnStep;
+                xAngleEdit.setText(String.valueOf(currentValue));
+            }
+        });
 
         initTensorFlowLiteInterpreterAndDetector();
         initBackProjector();
@@ -190,6 +240,11 @@ public class RunCameraActivity extends AppCompatActivity {
         }
 
         return points3D;
+    }
+
+    private void updateXAngle() {
+        float xAngle = Float.parseFloat(xAngleEdit.getText().toString());
+
     }
 
     public void saveBitmapToGallery(Context context, Bitmap bitmap,
