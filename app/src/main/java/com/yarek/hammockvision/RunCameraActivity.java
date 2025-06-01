@@ -8,6 +8,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -62,6 +63,7 @@ public class RunCameraActivity extends AppCompatActivity {
     Button buttonPlus;
     Button buttonMinus;
     EditText cameraHeightEdit;
+    MediaPlayer personNoticedPlayer;
     TextView fpsView;
 
     private final float cameraBtnStep = 0.5f;
@@ -72,12 +74,15 @@ public class RunCameraActivity extends AppCompatActivity {
     static final int MODEL_INPUT_SIZE = 640;
     BackProjector backProjector;
 
-    final long captureImageTimeMillisecond = 5;
+    final long captureImageTimeMillisecond = 5000;
     long lastImageCaptureTime = 0;
 
     long lastFrameTimeMilliseconds = 0;
 
     int[] resolution = {1280, 960};
+
+    float[] savePoint = new float[]{0, 0, -100};
+    float saveDistance = 150;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,6 +101,7 @@ public class RunCameraActivity extends AppCompatActivity {
 
         fpsView = findViewById(R.id.fps_tracker);
 
+        personNoticedPlayer = MediaPlayer.create(getApplicationContext(), R.raw.person_noticed);
 
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
         cameraProviderFuture.addListener(() -> {
@@ -228,6 +234,8 @@ public class RunCameraActivity extends AppCompatActivity {
 
             float[][] points3D = backProjectDetections(detections);
 
+            notifyIfDanger(points3D);
+
             long currentTime = System.currentTimeMillis();
             fpsView.setText(String.valueOf(((float)(Math.round((1f/( ((float)(currentTime - lastFrameTimeMilliseconds)) / 1000))*100))/100)));
             if (currentTime - lastImageCaptureTime > captureImageTimeMillisecond) {
@@ -272,11 +280,6 @@ public class RunCameraActivity extends AppCompatActivity {
         }
 
         return points3D;
-    }
-
-    private void updateXAngle() {
-        float xAngle = Float.parseFloat(xAngleEdit.getText().toString());
-
     }
 
     public void saveBitmapToGallery(Context context, Bitmap bitmap,
@@ -339,6 +342,18 @@ public class RunCameraActivity extends AppCompatActivity {
             }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void notifyIfDanger(float[][] points3D) {
+        boolean shouldPLay = false;
+        for(float[] point: points3D) {
+            if ( Math.sqrt( Math.pow(point[0] - savePoint[0], 2) + Math.pow(point[2] - savePoint[2], 2)) <= saveDistance) {
+                shouldPLay = true;
+            }
+        }
+        if (shouldPLay) {
+            personNoticedPlayer.start();
         }
     }
 
