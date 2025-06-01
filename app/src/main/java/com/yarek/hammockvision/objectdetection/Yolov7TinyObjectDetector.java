@@ -42,7 +42,7 @@ public class Yolov7TinyObjectDetector implements ObjectDetector {
             int classId = (int)detectionArray[5];
             float score = detectionArray[6];
 
-            if (score < 0.35) continue;
+            if (score < 0.70) continue;
 
 
             Detection detection = new Detection(
