@@ -11,7 +11,6 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Point;
 import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Build;
@@ -44,6 +43,7 @@ import org.tensorflow.lite.support.common.FileUtil;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -60,8 +60,10 @@ public class RunCameraActivity extends AppCompatActivity {
     static final int MODEL_INPUT_CHANNELS = 3;
     BackProjector backProjector;
 
-    int analyzeEveryFrames = 30;
+    final int analyzeImageTime = 30;
+    final int captureImageTime = 30;
     int framesPassed = 0;
+    int[] resolution = {1280, 960};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,15 +109,14 @@ public class RunCameraActivity extends AppCompatActivity {
         }
 
         Python python = Python.getInstance();
-        float[] rotations = {42.6f, 4, 0};
-        int[] resolution = {1280, 960};
+        float[] rotations = {0, 4, 0};
         backProjector = new BackProjector(
                 python,
                 new CameraInternalParams(
                         1035.990987371761, 1037.5660299778167,
                         647.1976126037574, 501.28397224530966,
                         resolution),
-                new CameraPosition(223.3, rotations)
+                new CameraPosition(69+5.5, rotations)
         );
         // TODO: change from hardcoded
     }
@@ -132,10 +133,25 @@ public class RunCameraActivity extends AppCompatActivity {
         imageAnalysis.setAnalyzer(executor, imageProxy -> {
             Bitmap bitmap = imageProxy.toBitmap();
 
-            if (framesPassed >= analyzeEveryFrames) {
-                List<Detection> detections = objectDetector.runInference(bitmap);
+            if (framesPassed % analyzeImageTime == 0) {
+
+                // Processing an inference
+                List<Detection> detectionsAll = objectDetector.runInference(bitmap);
+                List<Detection> detections = extractPersonDetections(detectionsAll);
+
+                // Setting results to overlayView
                 overlayView.setResults(detections);
                 overlayView.setPreviewSize(previewView.getWidth(), previewView.getHeight());
+
+                float[][] points3D = backProjectDetections(detections);
+
+                if (framesPassed % captureImageTime == 0) {
+                    saveBitmapToGallery(
+                            getApplicationContext(), objectDetector.prepareImage(bitmap),
+                            detections, points3D,
+                            "my_image_" + System.currentTimeMillis() + ".png"
+                            );
+                }
 
 //                backProjectAndDebug(new float[]{791, 437});
             }
@@ -162,6 +178,29 @@ public class RunCameraActivity extends AppCompatActivity {
         Log.d(TAG, pointStr.toString());
     }
 
+    private float[][] backProjectDetections(List<Detection> detections) {
+
+        // Back projecting necessary points
+        float[][] points3D = new float[detections.size()][];
+        for (int i = 0; i < detections.size(); i++) {
+            float[] point2D = new float[2];
+            Detection detection = detections.get(i);
+            point2D[0] = (detection.pixelEndX + detection.pixelStartX) / 2;
+            point2D[1] = detection.pixelEndY;
+
+            Log.d("Distance", "raw = " + String.valueOf(point2D[0]) + " " + String.valueOf(point2D[1]));
+
+            point2D = scalePoint(point2D, resolution);
+
+            Log.d("Distance", "scaled = " + String.valueOf(point2D[0]) + " " + String.valueOf(point2D[1]));
+
+            points3D[i] = backProjector.backProject(point2D);
+        }
+
+        return points3D;
+    }
+
+
     private void debugPrint(List<Detection> results) {
         for (int i = 0; i < results.size(); i++) {
             Detection r = results.get(i);
@@ -172,15 +211,38 @@ public class RunCameraActivity extends AppCompatActivity {
         }
     }
 
-    public void saveBitmapToGallery(Context context, Bitmap bitmap, RectF box, String displayName) {
+    public void saveBitmapToGallery(Context context, Bitmap bitmap,
+                                    List<Detection> detections, float[][] distances,
+                                    String displayName) {
 
         Canvas canvas = new Canvas(bitmap);
         Paint paint = new Paint();
         paint.setColor(Color.RED);
-        paint.setAlpha(113);
+        paint.setAlpha(63);
         paint.setStyle(Paint.Style.FILL);
 
-        canvas.drawRect(box, paint);
+        Paint textPaint = new Paint();
+        textPaint.setTextSize(20);
+
+
+        for (int i = 0; i < detections.size(); i++) {
+
+            Detection detection = detections.get(i);
+
+            RectF box = new RectF(
+                    detection.pixelStartX,
+                    detection.pixelStartY,
+                    detection.pixelEndX,
+                    detection.pixelEndY
+            );
+
+            canvas.drawRect(box, paint);
+            canvas.drawText(String.valueOf(Math.round(detection.classId*100)/100f ), detection.pixelStartX, detection.pixelStartY, textPaint);
+            canvas.drawText(String.valueOf( Math.round(detection.confidence*100)/100f), detection.pixelEndX, detection.pixelStartY, textPaint);
+            String distanceStr = String.valueOf(Math.round(distances[i][0])) + ' ' + distances[i][2];
+            canvas.drawText(distanceStr, detection.pixelStartX, detection.pixelEndY, textPaint);
+        }
+
 
         OutputStream fos;
         ContentResolver resolver = context.getContentResolver();
@@ -191,9 +253,8 @@ public class RunCameraActivity extends AppCompatActivity {
         values.put(MediaStore.Images.Media.WIDTH, bitmap.getWidth());
         values.put(MediaStore.Images.Media.HEIGHT, bitmap.getHeight());
 
-        // Для Android Q (API 29) і вище: встановлюємо відносний шлях
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MyAppImages"); // Галерея/Картинки/MyAppImages
+            values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MyAppImages");
         }
 
         Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
@@ -211,6 +272,26 @@ public class RunCameraActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    float[] scalePoint(float[] pointInInferenceSize, int[] neededSize) {
+        float scaleFactor = (float) neededSize[1] / (float) RunCameraActivity.MODEL_INPUT_SIZE;
+        float[] scaled = new float[2];
+        scaled[0] = pointInInferenceSize[0] * scaleFactor;
+        scaled[1] = pointInInferenceSize[1] * scaleFactor;
+
+        scaled[0] += ((float)neededSize[0] - neededSize[1]) / 2;
+        return scaled;
+    }
+
+    List<Detection> extractPersonDetections(List<Detection> detections) {
+        List<Detection> persons = new ArrayList<>();
+        for(Detection detection: detections) {
+            if (detection.classId == 0) {
+                persons.add(detection);
+            }
+        }
+        return persons;
     }
 
 }
