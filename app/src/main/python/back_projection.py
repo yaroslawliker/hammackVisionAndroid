@@ -75,6 +75,8 @@ class BackProjector:
         
         # Get the camera intrinsic matrix
         K = self.camera.get_internal_matrix(u, v)
+        print("Detection: internal_matrix", K)
+
         
         # Compute the direction vector in camera coordinates
         direction_vector = np.linalg.inv(K) @ point_homogeneous
@@ -87,18 +89,29 @@ class BackProjector:
         
         # Transform the direction vector to world coordinates
         direction_world = self.camera.orientation.T @ direction_camera
+        print("Detection: orientation", self.camera.orientation)
+
         
         return direction_world
     
     def back_project(self, photo_point: PhotoPoint):
+
+        print("Detection: point", photo_point.get_point_pixels()[0], photo_point.get_point_pixels()[1])
+
         # Get the direction vector in world coordinates
         photo = photo_point.get_photo_settings()
+        print("Detection: orientation", self.camera.orientation)
+        print("Detection: u, v", photo.get_u(), photo.get_v())
+
         direction_world = self.get_direction_to_point_world(
                 photo_point.get_point_pixels(), 
                 photo.get_u(), photo.get_v()
             )
         
         t0 = -self.camera.position[1] / direction_world[1]
+
+        print("Detection: position", self.camera.position)
+
 
         point_3d = self.camera.position + t0 * direction_world
         
