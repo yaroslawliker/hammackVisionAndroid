@@ -41,10 +41,7 @@ public class BackProjector {
         PyObject scipySpatialTransform = python.getModule("scipy.spatial.transform");
         PyObject rotationClass = scipySpatialTransform.get("Rotation");
 
-        double[] eulerAngles = new double[]{42.6, 4, 0.0};
-        // TODO: change from hardcoded
-
-        PyObject eulerArray = python.getModule("numpy").get("array").call(eulerAngles);
+        PyObject eulerArray = python.getModule("numpy").get("array").call(cameraPosition.eulerRotationAngles);
         PyObject rotationObj = rotationClass.callAttr("from_euler", "xyz", eulerArray, true);
         PyObject rotationMatrix = rotationObj.callAttr("as_matrix");
 

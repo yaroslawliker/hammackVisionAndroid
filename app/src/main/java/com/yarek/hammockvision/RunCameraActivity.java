@@ -109,14 +109,14 @@ public class RunCameraActivity extends AppCompatActivity {
         }
 
         Python python = Python.getInstance();
-        float[] rotations = {0, 4, 0};
+        float[] rotations = {0, 0, 0};
         backProjector = new BackProjector(
                 python,
                 new CameraInternalParams(
                         1035.990987371761, 1037.5660299778167,
                         647.1976126037574, 501.28397224530966,
                         resolution),
-                new CameraPosition(69+5.5, rotations)
+                new CameraPosition(74.5, rotations)
         );
         // TODO: change from hardcoded
     }
